@@ -41,18 +41,24 @@ except RuntimeError:
     warnings.warn('This can only be executed on Raspberry Pi', RuntimeWarning)
 
 
-def play(args, buttonsdb):
+rfsnifferdir = os.path.split(os.path.realpath(__name__))[0]
+defaultpath = os.path.join(rfsnifferdir, 'buttons.db')
+def play(txpin, buttonName, buttonsdb=defaultpath):
+    GPIO.setup(txpin, GPIO.OUT, initial=GPIO.LOW)
+    for i, (timing, level) in enumerate(buttonsdb[buttonName]):
+        if i is not 0:
+            # Busy-sleep (gives a better time granularity than
+            # sleep() but at the cost of busy looping)
+            now = time.time()
+            while now + timing > time.time():
+                pass
+            GPIO.output(txpin, level)
+
+
+def parsed_play(args, buttonsdb):
     GPIO.setup(args.txpin, GPIO.OUT, initial=GPIO.LOW)
     for button in args.button:
-        for i, (timing, level) in enumerate(buttonsdb[button]):
-            if i is not 0:
-                # Busy-sleep (gives a better time granularity than
-                # sleep() but at the cost of busy looping)
-                now = time.time()
-                while now + timing > time.time():
-                    pass
-
-            GPIO.output(args.txpin, level)
+        play(args.txpin, button, buttonsdb)
 
 
 def read_timings(rx_pin):
@@ -68,7 +74,7 @@ def read_timings(rx_pin):
             return capture
 
 
-def record(args, buttons):
+def parsed_record(args, buttons):
     GPIO.setup(args.rxpin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
     print('Press', args.button)
@@ -77,7 +83,7 @@ def record(args, buttons):
     buttons[args.button] = sample
 
 
-def dump(args, buttons):
+def parsed_dump(args, buttons):
     for button in sorted(buttons.keys()):
         print(button)
         if args.verbose:
@@ -102,26 +108,28 @@ def main():
                         help=('The RPi boardpin where the RF transmitter'
                               ' is attached'))
 
+    # directory = os.environ['HOME']
+    directory = rfsnifferdir
     parser.add_argument('-b', '--buttonsdb', dest='buttonsdb',
-                        default=os.path.join(os.environ['HOME'],
+                        default=os.path.join(directory,
                                              'buttons.db'))
 
     # Record subcommand
     parser_record = subparsers.add_parser('record',
                                           help='Record an RF signal')
     parser_record.add_argument('button')
-    parser_record.set_defaults(func=record)
+    parser_record.set_defaults(func=parsed_record)
 
     # Play subcommand
     parser_play = subparsers.add_parser('play', help=('Send a previously '
                                                       'recorded RF signal'))
     parser_play.add_argument('button', nargs='*')
-    parser_play.set_defaults(func=play)
+    parser_play.set_defaults(func=parsed_play)
 
     # Dump subcommand
     parser_dump = subparsers.add_parser('dump', help=('Dumps the already '
                                                       'recorded RF signals'))
-    parser_dump.set_defaults(func=dump)
+    parser_dump.set_defaults(func=parsed_dump)
 
     args = parser.parse_args()
 
