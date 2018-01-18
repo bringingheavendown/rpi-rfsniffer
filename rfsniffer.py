@@ -31,11 +31,13 @@ import os
 import shelve
 import time
 import warnings
+import sys
 
 try:
-    import RPi.GPIO as GPIO
-    GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BOARD)
+    if 'RPi.GPIO' not in sys.modules:
+        import RPi.GPIO as GPIO
+        GPIO.setwarnings(False)
+        GPIO.setmode(GPIO.BOARD)
 except RuntimeError:
     # Catch here so that we can actually test on non-pi targets
     warnings.warn('This can only be executed on Raspberry Pi', RuntimeWarning)
@@ -100,11 +102,18 @@ def main():
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true',
                         default=False, help='Verbose output')
 
-    parser.add_argument('--rxpin', type=int, default=13,
+    if GPIO.getmode() == GPIO.BCM:
+        defaulttxpin = 17
+        defaultrxpin = 27
+    elif GPIO.getmode() == GPIO.BOARD:
+        defaulttxpin = 11
+        defaultrxpin = 13
+
+    parser.add_argument('--rxpin', type=int, default=defaultrxpin,
                         help=('The RPi boardpin where the RF receiver'
                               ' is attached'))
 
-    parser.add_argument('--txpin', type=int, default=11,
+    parser.add_argument('--txpin', type=int, default=defaulttxpin,
                         help=('The RPi boardpin where the RF transmitter'
                               ' is attached'))
 
